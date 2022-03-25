@@ -12,42 +12,95 @@
 
 #define MAX(a, b, c) (MAX2(MAX2(a, b), c))
 #define MIN(a, b, c) (MIN2(MIN2(a, b), c))
+
+#define UNWRAP(l, v, d) (((double)((l >> (v - d)) & 0xff)) / 255.0f)
+
 #define VER "0.0.1"
 
-typedef unsigned char u8;
-
-u8 rgba[4], hsl[3], cmyk[4];
+double rgba[4], hsl[3], cmyk[4];
 ui_t u;
 
-void recompute(u8 *src){
-  if(src == rgba){
-    /* rgba to hsl */
-    u8 max = MAX(rgba[0], rgba[1], rgba[2]),
-       min = MIN(rgba[0], rgba[1], rgba[2]);
+/**
+ * COLOR SPACE CONVERSIONS
+ */
 
-    hsl[2] = (max + min) / 2;
-    hsl[1] = (hsl[2] >= 128
-      ? (max - min) / (max + min)
-      : (max - min) / (512 - max - min)
-    );
+/* https://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion */
+void rgba_to_hsl(){
+  double max = MAX(rgba[0], rgba[1], rgba[2]),
+         min = MIN(rgba[0], rgba[1], rgba[2]),
+         d = max - min;
+  
+  hsl[2] = (max + min) / 2.0f;
+  if(d == 0.0f){
+    hsl[0] = hsl[1] = 0.0f;
+  } else {
+    hsl[1] = (hsl[2] > 0.5) ? d / (2.0f - max - min) : d / (max + min);
     if(max == rgba[0]){
-      hsl[0] = (hsl[1] - hsl[2]) / (max - min);
+        hsl[0] = (rgba[1] - rgba[2]) / d + (rgba[1] < rgba[2] ? 6.0f : 0.0f);
     } else if(max == rgba[1]){
-      hsl[0] = 512 + ((hsl[2] - hsl[0]) / (max - min));
+        hsl[0] = (rgba[2] - rgba[0]) / d + 2.0f;
     } else {
-      hsl[0] = 1024 + ((hsl[0] - hsl[1]) / (max - min));
+        hsl[0] = (rgba[0] - rgba[1]) / d + 4.0f;
     }
-    hsl[0] *= 43;
+    hsl[0] /= 6.0f;
+  }
+}
+double hue_to_rgb(double p, double q, double t){
+  if(t < 0.0f) t += 1.0f;
+  if(t > 1.0f) t -= 1.0f;
+  if(t < (1.0f / 6.0f)) return p + (q - p) * 6.0f * t;
+  if(t < 0.5f) return q;
+  if(t < (2.0f / 3.0f)) return p + (q - p) * ((2.0f / 3.0f) - t) * 6.0f;
+  return p;
+}
+void hsl_to_rgba(){
+  double p, q;
 
-    /* rgba to cmyk */
-    cmyk[3] = 255 - max;
-    cmyk[0] = max * (255 - rgba[0] - cmyk[0]) / 255;
-    cmyk[1] = max * (255 - rgba[1] - cmyk[0]) / 255;
-    cmyk[2] = max * (255 - rgba[2] - cmyk[0]) / 255;
+  rgba[3] = 1.0f;
+
+  if(hsl[1] == 0.0f){
+    rgba[0] = rgba[1] = rgba[2] = hsl[2];
+  } else {
+    q = (hsl[2] < 0.5 ? hsl[2] * (1.0f + hsl[1]) : (hsl[2] + hsl[1] - (hsl[2] * hsl[1])));
+    p = (2.0f * hsl[2]) - q;
+    rgba[0] = hue_to_rgb(p, q, hsl[0] + (1.0f / 3.0f));
+    rgba[1] = hue_to_rgb(p, q, hsl[0]);
+    rgba[2] = hue_to_rgb(p, q, hsl[0] - (1.0f / 3.0f));
+  }
+}
+
+/* https://stackoverflow.com/questions/2426432/convert-rgb-color-to-cmyk */
+void rgba_to_cmyk(){
+  double max = MAX(rgba[0], rgba[1], rgba[2]);
+
+  cmyk[3] = 1.0f - max;
+  cmyk[0] = (max - rgba[0]) / max;
+  cmyk[1] = (max - rgba[1]) / max;
+  cmyk[2] = (max - rgba[2]) / max;
+}
+void cmyk_to_rgba(){
+  double max = 1.0f - cmyk[3];
+
+  rgba[0] = max * (1.0f - cmyk[0]);
+  rgba[1] = max * (1.0f - cmyk[1]);
+  rgba[2] = max * (1.0f - cmyk[2]);
+  rgba[3] = 1.0f;
+}
+
+/**
+ * UI EVENTS
+ */
+
+void recompute(double *src){
+  if(src == rgba){
+    rgba_to_hsl();
+    rgba_to_cmyk();
   } else if(src == hsl){
-    /* hsl to rgba */
+    hsl_to_rgba();
+    rgba_to_cmyk();
   } else if(src == cmyk){
-    /* cmyk to rgba */
+    cmyk_to_rgba();
+    rgba_to_hsl();
   }
 }
 
@@ -55,12 +108,11 @@ void box(ui_box_t *b, char *out){
   int x, y;
   char tmp[256];
 
-  /* rgba -> rgb with fast bitshift */
   sprintf(
     out, "\x1b[48;2;%i;%i;%im",
-    (rgba[3] * rgba[0]) >> 8,
-    (rgba[3] * rgba[1]) >> 8,
-    (rgba[3] * rgba[2]) >> 8
+    (int)floor(255.0f * rgba[3] * rgba[0]),
+    (int)floor(255.0f * rgba[3] * rgba[1]),
+    (int)floor(255.0f * rgba[3] * rgba[2])
   );
   for(y=0;y<b->h;y++){
     for(x=0;x<b->w;x++){
@@ -73,10 +125,10 @@ void box(ui_box_t *b, char *out){
 
 void slider(ui_box_t *b, char *out){
   int i;
-  u8 *src = (u8*)b->data2;
+  double *src = (int*)b->data2;
   strcpy(out, "\x1b[48;2;99;99;99m");
-  for(i=0;i<b->w;i++){
-    if(src[(int)b->data1] / 8 == i){
+  for(i=0;i<=b->w;i++){
+    if((int)floor(src[(int)b->data1] * (double)b->w) == i){
       strcat(out, "\x1b[48;2;200;200;200m \x1b[48;2;99;99;99m");
     } else {
       strcat(out, " ");
@@ -86,8 +138,8 @@ void slider(ui_box_t *b, char *out){
 }
 
 void click(ui_box_t *b, int x, int y){
-  u8 *src = (u8*)b->data2;
-  src[(int)b->data1] = (x - b->x) * 8;
+  double *src = (int*)b->data2;
+  src[(int)b->data1] = ((double)(x - b->x)) / (double)b->w;
   recompute(src);
 
   ui_draw(&u);
@@ -98,13 +150,47 @@ void hover(ui_box_t *b, int x, int y, int down){
 }
 
 void output(ui_box_t *b, char *out){
-  sprintf(
-    out, "#%X%X%X%X  rgba(%-3i, %-3i, %-3i, %-3i)  hsl(%-3ideg, %-3i%%, %-3i%%)  cmyk(%-3i%%, %-3i%%, %-3i%%, %-3i%%)\n",
-    rgba[0], rgba[1], rgba[2], rgba[3],
-    rgba[0], rgba[1], rgba[2], rgba[3],
-    hsl[0], hsl[1], hsl[2],
-    cmyk[0], cmyk[1], cmyk[2], cmyk[3]
-  );
+  if(b->data1 == rgba){
+    sprintf(
+      out, "RGBA: rgba(%i, %i, %i, %.2f)\n",
+      (int)(255.0f * rgba[0]),
+      (int)(255.0f * rgba[1]),
+      (int)(255.0f * rgba[2]),
+      rgba[3]
+    );
+  } else if(b->data1 == hsl){
+    sprintf(
+      out, "HSL: hsl(%ideg, %i%%, %i%%)\n",
+      (int)(360.0f * hsl[0]),
+      (int)(100.0f * hsl[1]),
+      (int)(100.0f * hsl[2])
+    );
+  } else if(b->data1 == cmyk){
+    sprintf(
+      out, "CMYK: cmyk(%i%%, %i%%, %i%%, %i%%)\n",
+      (int)(100.0f * cmyk[0]),
+      (int)(100.0f * cmyk[1]),
+      (int)(100.0f * cmyk[2]),
+      (int)(100.0f * cmyk[3])
+    );
+  } else {
+    sprintf(
+      out, "HEX: #%X%X%X%X\n",
+      (int)(255.0f * rgba[0]),
+      (int)(255.0f * rgba[1]),
+      (int)(255.0f * rgba[2]),
+      (int)(255.0f * rgba[3])
+    );
+  }
+}
+
+/**
+ * UTIL AND MAIN
+ */
+
+void usage(){
+  printf("Usage: colorslide [color]\n  Where [color] is in the form RRGGBB or RRGGBBAA\n");
+  exit(0);
 }
 
 void stop(){
@@ -114,18 +200,32 @@ void stop(){
 
 int main(int argc, char **argv){
   int i;
+  char *end;
+  long int l, v;
 
-  srand(time(NULL));
-  rgba[0] = rand() % 255;
-  rgba[1] = rand() % 255;
-  rgba[2] = rand() % 255;
-  rgba[3] = 255;
+  if(argc > 1){
+    l = strtol(argv[1], &end, 16);
+    v = (end - argv[1]) * 4;
+
+    if(v == 24 || v == 32){
+      rgba[0] = UNWRAP(l, v, 8);
+      rgba[1] = UNWRAP(l, v, 16);
+      rgba[2] = UNWRAP(l, v, 24);
+      rgba[3] = v == 24 ? 1.0f : UNWRAP(l, v, 32);
+    } else usage();
+  } else {
+    srand(time(NULL));
+    rgba[0] = ((double)(rand() % 255)) / 255.0f;
+    rgba[1] = ((double)(rand() % 255)) / 255.0f;
+    rgba[2] = ((double)(rand() % 255)) / 255.0f;
+    rgba[3] = 1.0f;
+  }
   recompute(rgba);
 
   signal(SIGINT,   stop);
   signal(SIGTERM,  stop);
   signal(SIGQUIT,  stop);
-  // signal(SIGWINCH, resize);
+  /* signal(SIGWINCH, resize); */
 
   ui_new(0, &u);
 
@@ -150,12 +250,17 @@ int main(int argc, char **argv){
   );
   
   /* Sliders */
-  ui_text(
-    -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 14 + 2,
+  ui_add(
+    -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
     ui_center_y(1, &u) - 13 + 1,
-    "RGBA",
+    16, 1,
     0,
-    NULL, NULL,
+    NULL, 0,
+    output,
+    NULL,
+    NULL,
+    (void*)rgba,
+    NULL,
     &u
   );
   for(i=0;i<4;i++){
@@ -164,7 +269,7 @@ int main(int argc, char **argv){
       ui_center_y(1, &u) - 9 + (2 * i) - 1,
       32, 1,
       0,
-      &rgba[i], rgba[i] + 1,
+      NULL, 0,
       slider,
       click,
       hover,
@@ -174,12 +279,17 @@ int main(int argc, char **argv){
     );
   }
 
-  ui_text(
-    -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 14 + 2,
+  ui_add(
+    -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
     ui_center_y(1, &u) - 11 + 8 + 1,
-    "HSL",
+    16, 1,
     0,
-    NULL, NULL,
+    NULL, 0,
+    output,
+    NULL,
+    NULL,
+    (void*)hsl,
+    NULL,
     &u
   );
   for(i=0;i<3;i++){
@@ -188,7 +298,7 @@ int main(int argc, char **argv){
       ui_center_y(1, &u) - 11 + 12 + (2 * i) - 1,
       32, 1,
       0,
-      &hsl[i], hsl[i] + 1,
+      NULL, 0,
       slider,
       click,
       hover,
@@ -198,12 +308,17 @@ int main(int argc, char **argv){
     );
   }
 
-  ui_text(
-    -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 14 + 2,
+  ui_add(
+    -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
     ui_center_y(1, &u) - 11 + 8 + 8 + 1,
-    "CMYK",
+    16, 1,
     0,
-    NULL, NULL,
+    NULL, 0,
+    output,
+    NULL,
+    NULL,
+    (void*)cmyk,
+    NULL,
     &u
   );
   for(i=0;i<4;i++){
@@ -212,7 +327,7 @@ int main(int argc, char **argv){
       ui_center_y(1, &u) - 11 + 12 + 8 + (2 * i) - 1,
       32, 1,
       0,
-      &cmyk[i], cmyk[i] + 1,
+      NULL, 0,
       slider,
       click,
       hover,
@@ -223,7 +338,7 @@ int main(int argc, char **argv){
   }
 
   ui_add(
-    ui_center_x(98, &u),
+    ui_center_x(56, &u),
     ui_center_y(0, &u) + 15,
     100, 1,
     0,
