@@ -175,7 +175,7 @@ void output(ui_box_t *b, char *out){
     );
   } else {
     sprintf(
-      out, "HEX: #%X%X%X%X\n",
+      out, "HEX: #%.2X%.2X%.2X%.2X\n",
       (int)(255.0f * rgba[0]),
       (int)(255.0f * rgba[1]),
       (int)(255.0f * rgba[2]),
