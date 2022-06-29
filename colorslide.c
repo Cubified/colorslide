@@ -15,7 +15,7 @@
 
 #define UNWRAP(l, v, d) (((double)((l >> (v - d)) & 0xff)) / 255.0f)
 
-#define VER "0.0.1"
+#define VER "0.1.0"
 
 double rgba[4], hsl[3], cmyk[4];
 ui_t u;
@@ -146,7 +146,7 @@ void click(ui_box_t *b, int x, int y){
 }
 
 void hover(ui_box_t *b, int x, int y, int down){
-  if(down) click(b, x, y);
+  if(down && x >= b->x && x <= b->x + b->w) click(b, x, y);
 }
 
 void output(ui_box_t *b, char *out){

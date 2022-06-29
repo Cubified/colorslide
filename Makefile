@@ -11,9 +11,9 @@ OUTPUT=colorslide
 
 RM=/bin/rm
 
-colorslide: $(INPUT)
+colorslide: $(INPUT) tuibox.h
 	$(CC) $(INPUT) -o $(OUTPUT) $(LIBS) $(CFLAGS)
-debug: $(INPUT)
+debug: $(INPUT) tuibox.h
 	$(CC) $(INPUT) -o $(OUTPUT) $(LIBS) $(DEBUGCFLAGS)
 clean: $(OUTPUT)
 	if [ -e $(OUTPUT) ]; then $(RM) $(OUTPUT); fi
