@@ -125,7 +125,7 @@ void box(ui_box_t *b, char *out){
 
 void slider(ui_box_t *b, char *out){
   int i;
-  double *src = (int*)b->data2;
+  double *src = (double*)b->data2;
   strcpy(out, "\x1b[48;2;99;99;99m");
   for(i=0;i<=b->w;i++){
     if((int)floor(src[(int)b->data1] * (double)b->w) == i){
@@ -138,7 +138,7 @@ void slider(ui_box_t *b, char *out){
 }
 
 void click(ui_box_t *b, int x, int y){
-  double *src = (int*)b->data2;
+  double *src = (double*)b->data2;
   src[(int)b->data1] = ((double)(x - b->x)) / (double)b->w;
   recompute(src);
 

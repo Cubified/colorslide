@@ -3,7 +3,7 @@ all: colorslide
 CC=cc
 
 LIBS=-lm
-CFLAGS=-O3 -pipe -ansi -Wno-void-pointer-to-int-cast -Wno-int-to-void-pointer-cast -Wno-pointer-sign -Wno-incompatible-pointer-types
+CFLAGS=-O3 -pipe -ansi -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -Wno-pointer-sign -Wno-incompatible-pointer-types
 DEBUGCFLAGS=-Og -pipe -g
 
 INPUT=colorslide.c
