@@ -138,6 +138,9 @@ void slider(ui_box_t *b, char *out){
 }
 
 void click(ui_box_t *b, int x, int y){
+  if (x < b->x || x > b->x + b->w)
+    return;
+
   double *src = (double*)b->data2;
   src[(int)b->data1] = ((double)(x - b->x)) / (double)b->w;
   recompute(src);
