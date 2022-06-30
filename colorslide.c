@@ -105,10 +105,10 @@ void recompute(double *src){
 }
 
 void box(ui_box_t *b, char *out){
-  int x, y;
+  int x, y, len = 0;
   char tmp[256];
 
-  sprintf(
+  len = sprintf(
     out, "\x1b[48;2;%i;%i;%im",
     (int)floor(255.0f * rgba[3] * rgba[0]),
     (int)floor(255.0f * rgba[3] * rgba[1]),
@@ -116,11 +116,11 @@ void box(ui_box_t *b, char *out){
   );
   for(y=0;y<b->h;y++){
     for(x=0;x<b->w;x++){
-      strcat(out, " ");
+      out[len++] = ' ';
     }
-    strcat(out, "\n");
+    out[len++] = '\n';
   }
-  strcat(out, "\x1b[0m");
+  strcat(out + len, "\x1b[0m");
 }
 
 void slider(ui_box_t *b, char *out){
@@ -201,36 +201,12 @@ void stop(){
   exit(0);
 }
 
-int main(int argc, char **argv){
-  int i;
-  char *end;
-  long int l, v;
+void resize(int sig){
+  int i, w, x;
 
-  if(argc > 1){
-    l = strtol(argv[1], &end, 16);
-    v = (end - argv[1]) * 4;
-
-    if(v == 24 || v == 32){
-      rgba[0] = UNWRAP(l, v, 8);
-      rgba[1] = UNWRAP(l, v, 16);
-      rgba[2] = UNWRAP(l, v, 24);
-      rgba[3] = v == 24 ? 1.0f : UNWRAP(l, v, 32);
-    } else usage();
-  } else {
-    srand(time(NULL));
-    rgba[0] = ((double)(rand() % 255)) / 255.0f;
-    rgba[1] = ((double)(rand() % 255)) / 255.0f;
-    rgba[2] = ((double)(rand() % 255)) / 255.0f;
-    rgba[3] = 1.0f;
+  if(sig != 0){
+    ui_clear(&u);
   }
-  recompute(rgba);
-
-  signal(SIGINT,   stop);
-  signal(SIGTERM,  stop);
-  signal(SIGQUIT,  stop);
-  /* signal(SIGWINCH, resize); */
-
-  ui_new(0, &u);
 
   ui_text(
     UI_CENTER_X, ui_center_y(30, &u),
@@ -241,10 +217,12 @@ int main(int argc, char **argv){
   );
 
   /* Color box */
+  w = MIN2(54, u.ws.ws_col / 2);
+  x = w == 54 ? -20 : (-w / 3);
   ui_add(
-    -20 + ui_center_x(54, &u) - 2,
+    x + ui_center_x(w, &u) - 2,
     ui_center_y(26, &u),
-    54, 27,
+    w, 27,
     0,
     NULL, 0,
     box, NULL, NULL,
@@ -255,7 +233,7 @@ int main(int argc, char **argv){
   /* Sliders */
   ui_add(
     -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
-    ui_center_y(1, &u) - 13 + 1,
+    ui_center_y(26, &u),
     16, 1,
     0,
     NULL, 0,
@@ -269,7 +247,7 @@ int main(int argc, char **argv){
   for(i=0;i<4;i++){
     ui_add(
       -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
-      ui_center_y(1, &u) - 9 + (2 * i) - 1,
+      ui_center_y(26, &u) + 2 + (2 * i),
       32, 1,
       0,
       NULL, 0,
@@ -284,7 +262,7 @@ int main(int argc, char **argv){
 
   ui_add(
     -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
-    ui_center_y(1, &u) - 11 + 8 + 1,
+    ui_center_y(26, &u) + 10,
     16, 1,
     0,
     NULL, 0,
@@ -298,7 +276,7 @@ int main(int argc, char **argv){
   for(i=0;i<3;i++){
     ui_add(
       -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
-      ui_center_y(1, &u) - 11 + 12 + (2 * i) - 1,
+      ui_center_y(26, &u) + 12 + (2 * i),
       32, 1,
       0,
       NULL, 0,
@@ -313,7 +291,7 @@ int main(int argc, char **argv){
 
   ui_add(
     -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
-    ui_center_y(1, &u) - 11 + 8 + 8 + 1,
+    ui_center_y(26, &u) + 18,
     16, 1,
     0,
     NULL, 0,
@@ -327,7 +305,7 @@ int main(int argc, char **argv){
   for(i=0;i<4;i++){
     ui_add(
       -20 + 2 + ui_center_x(32, &u) + 24 + 16 + 2,
-      ui_center_y(1, &u) - 11 + 12 + 8 + (2 * i) - 1,
+      ui_center_y(26, &u) + 20 + (2 * i),
       32, 1,
       0,
       NULL, 0,
@@ -357,6 +335,39 @@ int main(int argc, char **argv){
   ui_key("q", stop, &u);
 
   ui_draw(&u);
+}
+
+int main(int argc, char **argv){
+  char *end;
+  long int l, v;
+
+  if(argc > 1){
+    l = strtol(argv[1], &end, 16);
+    v = (end - argv[1]) * 4;
+
+    if(v == 24 || v == 32){
+      rgba[0] = UNWRAP(l, v, 8);
+      rgba[1] = UNWRAP(l, v, 16);
+      rgba[2] = UNWRAP(l, v, 24);
+      rgba[3] = v == 24 ? 1.0f : UNWRAP(l, v, 32);
+    } else usage();
+  } else {
+    srand(time(NULL));
+    rgba[0] = ((double)(rand() % 255)) / 255.0f;
+    rgba[1] = ((double)(rand() % 255)) / 255.0f;
+    rgba[2] = ((double)(rand() % 255)) / 255.0f;
+    rgba[3] = 1.0f;
+  }
+  recompute(rgba);
+
+  signal(SIGINT,   stop);
+  signal(SIGTERM,  stop);
+  signal(SIGQUIT,  stop);
+  signal(SIGWINCH, resize);
+
+  ui_new(0, &u);
+
+  resize(0);
 
   ui_loop(&u){
     ui_update(&u);
