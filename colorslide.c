@@ -202,7 +202,7 @@ void stop(){
 }
 
 void resize(int sig){
-  int i, w, x;
+  int i, w, x, h;
 
   if(sig != 0){
     ui_clear(&u);
@@ -218,11 +218,12 @@ void resize(int sig){
 
   /* Color box */
   w = MIN2(54, u.ws.ws_col / 2);
+  h = MIN2(27, u.ws.ws_row - 4);
   x = w == 54 ? -20 : (-w / 3);
   ui_add(
     x + ui_center_x(w, &u) - 2,
-    ui_center_y(26, &u),
-    w, 27,
+    ui_center_y(2 * floor(h / 2), &u),
+    w, h,
     0,
     NULL, 0,
     box, NULL, NULL,
